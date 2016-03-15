@@ -22,12 +22,17 @@
 #include <gst/rtsp-server/rtsp-server.h>
 
 #define DEFAULT_RTSP_PORT "8554"
+#define DEFAULT_RTSP_BIND_ADDRESS "0.0.0.0"
+#define DEFAULT_RTSP_RESOURCE_NAME "resource"
 
 static char *port = (char *) DEFAULT_RTSP_PORT;
+static char *bind_address = (char *) DEFAULT_RTSP_BIND_ADDRESS;
+static char *resource_name = (char *) DEFAULT_RTSP_RESOURCE_NAME;
 
 static GOptionEntry entries[] = {
-  {"port", 'p', 0, G_OPTION_ARG_STRING, &port,
-      "Port to listen on (default: " DEFAULT_RTSP_PORT ")", "PORT"},
+  {"port", 'p', 0, G_OPTION_ARG_STRING, &port, "Port to listen on (default: " DEFAULT_RTSP_PORT ")", "PORT"},
+  {"bind-address", 'b', 0, G_OPTION_ARG_STRING, &port, "Bind address to listen on (default: " DEFAULT_RTSP_BIND_ADDRESS ")", "BIND_ADDRESS"},
+  {"resource-name", 'r', 0, G_OPTION_ARG_STRING, &port, "Resource name to listen on (default: " DEFAULT_RTSP_RESOURCE_NAME ")", "RESOURCE_NAME"},
   {NULL}
 };
 
@@ -110,8 +115,11 @@ main (int argc, char *argv[])
 
   /* create a server instance */
   server = gst_rtsp_server_new ();
-  g_object_set (server, "service", port, NULL);
-  gst_rtsp_server_set_address (server, "0.0.0.0");
+  //g_object_set (server, "service", port, NULL);
+  
+  /* set bind address and port */
+  gst_rtsp_server_set_address (server, bind_address);
+  gst_rtsp_server_set_service (server, port);
 
   /* get the mount points for this server, every server has a default object
    * that be used to map uri mount points to media factories */
@@ -121,7 +129,7 @@ main (int argc, char *argv[])
 str = g_strdup_printf ("( "
       "filesrc location=%s ! qtdemux name=d "
       "d. ! queue2 ! avdec_h264 ! videoconvert ! edgedetect ! videoconvert ! x264enc tune=zerolatency ! rtph264pay pt=96 name=pay0 "
-      "d. ! queue2 ! avdec_aac ! audioconvert ! rtpL16pay pt=97 name=pay1 " ")", argv[1]);
+      "d. ! queue2 ! avdec_aac ! audioconvert ! rtpL16pay pt=97 name=pay1 " ")", resource_name);
 
    /* make a media factory for a test stream. The default media factory can use
    * gst-launch syntax to create pipelines. 
@@ -133,8 +141,8 @@ str = g_strdup_printf ("( "
       factory);
   g_free (str);
 
-  /* attach the test factory to the /test url */
-  gst_rtsp_mount_points_add_factory (mounts, "/test", factory);
+  /* attach the test factory to the /resource url */
+  gst_rtsp_mount_points_add_factory (mounts, "/resource", factory);
 
   /* don't need the ref to the mapper anymore */
   g_object_unref (mounts);
@@ -143,7 +151,7 @@ str = g_strdup_printf ("( "
   gst_rtsp_server_attach (server, NULL);
 
   /* start serving */
-  g_print ("stream ready at rtsp://%s:%s/test\n", gst_rtsp_server_get_address(server), port);
+  g_print ("stream ready at rtsp://%s:%s/resource\n", bind_address, port);
   g_main_loop_run (loop);
 
   return 0;
