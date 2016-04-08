@@ -31,8 +31,8 @@ static char *resource_name = (char *) DEFAULT_RTSP_RESOURCE_NAME;
 
 static GOptionEntry entries[] = {
   {"port", 'p', 0, G_OPTION_ARG_STRING, &port, "Port to listen on (default: " DEFAULT_RTSP_PORT ")", "PORT"},
-  {"bind-address", 'b', 0, G_OPTION_ARG_STRING, &port, "Bind address to listen on (default: " DEFAULT_RTSP_BIND_ADDRESS ")", "BIND_ADDRESS"},
-  {"resource-name", 'r', 0, G_OPTION_ARG_STRING, &port, "Resource name to listen on (default: " DEFAULT_RTSP_RESOURCE_NAME ")", "RESOURCE_NAME"},
+  {"bind-address", 'b', 0, G_OPTION_ARG_STRING, &bind_address, "Bind address to listen on (default: " DEFAULT_RTSP_BIND_ADDRESS ")", "BIND_ADDRESS"},
+  {"resource-name", 'r', 0, G_OPTION_ARG_STRING, &resource_name, "Resource name to listen on (default: " DEFAULT_RTSP_RESOURCE_NAME ")", "RESOURCE_NAME"},
   {NULL}
 };
 
@@ -41,7 +41,6 @@ static void
 on_ssrc_active (GObject * session, GObject * source, GstRTSPMedia * media)
 {
   GstStructure *stats;
-
   GST_INFO ("source %p in session %p is active", source, session);
 
   g_object_get (source, "stats", &stats, NULL);
@@ -62,7 +61,7 @@ static void
 media_prepared_cb (GstRTSPMedia * media)
 {
   guint i, n_streams;
-
+  
   n_streams = gst_rtsp_media_n_streams (media);
 
   GST_INFO ("media %p is prepared and has %u streams", media, n_streams);
@@ -118,25 +117,26 @@ main (int argc, char *argv[])
   //g_object_set (server, "service", port, NULL);
   
   /* set bind address and port */
-  gst_rtsp_server_set_address (server, bind_address);
-  gst_rtsp_server_set_service (server, port);
+  gst_rtsp_server_set_address (server, argv[2]);
+  gst_rtsp_server_set_service (server, argv[1]);
 
   /* get the mount points for this server, every server has a default object
    * that be used to map uri mount points to media factories */
   mounts = gst_rtsp_server_get_mount_points (server);
 	
   
-str = g_strdup_printf ("( "
-      "filesrc location=%s ! qtdemux name=d "
-      "d. ! queue2 ! avdec_h264 ! videoconvert ! edgedetect ! videoconvert ! x264enc tune=zerolatency ! rtph264pay pt=96 name=pay0 "
-      "d. ! queue2 ! avdec_aac ! audioconvert ! rtpL16pay pt=97 name=pay1 " ")", resource_name);
-
+str = g_strdup_printf (
+        "(" 
+	" filesrc location=%s ! qtdemux name=d d. ! queue2 ! avdec_h264 max-threads=6 ! videoconvert !  edgedetect ! videoconvert ! x264enc tune=zerolatency byte-stream=true bitrate=1024 speed-preset=superfast ! queue ! rtph264pay pt=96 name=pay0 "
+	")", argv[3]);
    /* make a media factory for a test stream. The default media factory can use
    * gst-launch syntax to create pipelines. 
    * any launch line works as long as it contains elements named pay%d. Each
    * element with pay%d names will be a stream */
   factory = gst_rtsp_media_factory_new ();
   gst_rtsp_media_factory_set_launch (factory, str);
+  gst_rtsp_media_factory_set_protocols(factory, GST_RTSP_LOWER_TRANS_TCP);
+  //gst_rtsp_media_factory_set_latency(factory, 15000);
   g_signal_connect (factory, "media-configure", (GCallback) media_configure_cb,
       factory);
   g_free (str);
@@ -151,7 +151,7 @@ str = g_strdup_printf ("( "
   gst_rtsp_server_attach (server, NULL);
 
   /* start serving */
-  g_print ("stream ready at rtsp://%s:%s/resource\n", bind_address, port);
+  g_print ("stream ready at rtsp://%s:%s/resource\n", argv[2], argv[1]);
   g_main_loop_run (loop);
 
   return 0;
